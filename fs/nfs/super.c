@@ -86,9 +86,11 @@ const struct super_operations nfs_sops = {
 };
 EXPORT_SYMBOL_GPL(nfs_sops);
 
+#ifdef CONFIG_NFS_V4_2
 static const struct nfs_ssc_client_ops nfs_ssc_clnt_ops_tbl = {
 	.sco_sb_deactive = nfs_sb_deactive,
 };
+#endif
 
 #if IS_ENABLED(CONFIG_NFS_V4)
 static int __init register_nfs4_fs(void)
@@ -111,15 +113,21 @@ static void unregister_nfs4_fs(void)
 }
 #endif
 
+#ifdef CONFIG_NFS_V4_2
 static void nfs_ssc_register_ops(void)
 {
+#ifdef CONFIG_NFSD_V4
 	nfs_ssc_register(&nfs_ssc_clnt_ops_tbl);
+#endif
 }
 
 static void nfs_ssc_unregister_ops(void)
 {
+#ifdef CONFIG_NFSD_V4
 	nfs_ssc_unregister(&nfs_ssc_clnt_ops_tbl);
+#endif
 }
+#endif /* CONFIG_NFS_V4_2 */
 
 static struct shrinker acl_shrinker = {
 	.count_objects	= nfs_access_cache_count,
@@ -148,7 +156,9 @@ int __init register_nfs_fs(void)
 	ret = register_shrinker(&acl_shrinker);
 	if (ret < 0)
 		goto error_3;
+#ifdef CONFIG_NFS_V4_2
 	nfs_ssc_register_ops();
+#endif
 	return 0;
 error_3:
 	nfs_unregister_sysctl();
@@ -168,7 +178,9 @@ void __exit unregister_nfs_fs(void)
 	unregister_shrinker(&acl_shrinker);
 	nfs_unregister_sysctl();
 	unregister_nfs4_fs();
+#ifdef CONFIG_NFS_V4_2
 	nfs_ssc_unregister_ops();
+#endif
 	unregister_filesystem(&nfs_fs_type);
 }
 
@@ -511,6 +523,13 @@ static void nfs_show_mount_options(struct seq_file *m, struct nfs_server *nfss,
 		seq_puts(m, ",local_lock=flock");
 	else
 		seq_puts(m, ",local_lock=posix");
+
+	if (nfss->flags & NFS_MOUNT_WRITE_EAGER) {
+		if (nfss->flags & NFS_MOUNT_WRITE_WAIT)
+			seq_puts(m, ",write=wait");
+		else
+			seq_puts(m, ",write=eager");
+	}
 }
 
 /*
@@ -1026,7 +1045,7 @@ static void nfs_fill_super(struct super_block *sb, struct nfs_fs_context *ctx)
 	sb->s_blocksize = 0;
 	sb->s_xattr = server->nfs_client->cl_nfs_mod->xattr;
 	sb->s_op = server->nfs_client->cl_nfs_mod->sops;
-	if (ctx && ctx->bsize)
+	if (ctx->bsize)
 		sb->s_blocksize = nfs_block_size(ctx->bsize, &sb->s_blocksize_bits);
 
 	if (server->nfs_client->rpc_ops->version != 2) {
@@ -1058,6 +1077,7 @@ static void nfs_fill_super(struct super_block *sb, struct nfs_fs_context *ctx)
 						 &sb->s_blocksize_bits);
 
 	nfs_super_set_maxbytes(sb, server->maxfilesize);
+	server->has_sec_mnt_opts = ctx->has_sec_mnt_opts;
 }
 
 static int nfs_compare_mount_options(const struct super_block *s, const struct nfs_server *b,
@@ -1173,6 +1193,9 @@ static int nfs_compare_super(struct super_block *sb, struct fs_context *fc)
 	if (memcmp(&old->fsid, &server->fsid, sizeof(old->fsid)) != 0)
 		return 0;
 	if (!nfs_compare_userns(old, server))
+		return 0;
+	if ((old->has_sec_mnt_opts || fc->security) &&
+			security_sb_mnt_opts_compat(sb, fc->security))
 		return 0;
 	return nfs_compare_mount_options(sb, server, fc);
 }
