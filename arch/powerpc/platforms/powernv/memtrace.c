@@ -18,7 +18,6 @@
 #include <linux/memory_hotplug.h>
 #include <linux/numa.h>
 #include <asm/machdep.h>
-#include <asm/debugfs.h>
 #include <asm/cacheflush.h>
 
 /* This enables us to keep track of the memory removed from each node. */
@@ -104,8 +103,8 @@ static void memtrace_clear_range(unsigned long start_pfn,
 	 * Before we go ahead and use this range as cache inhibited range
 	 * flush the cache.
 	 */
-	flush_dcache_range_chunked(PFN_PHYS(start_pfn),
-				   PFN_PHYS(start_pfn + nr_pages),
+	flush_dcache_range_chunked((unsigned long)pfn_to_kaddr(start_pfn),
+				   (unsigned long)pfn_to_kaddr(start_pfn + nr_pages),
 				   FLUSH_CHUNK_SIZE);
 }
 
@@ -330,7 +329,7 @@ DEFINE_SIMPLE_ATTRIBUTE(memtrace_init_fops, memtrace_enable_get,
 static int memtrace_init(void)
 {
 	memtrace_debugfs_dir = debugfs_create_dir("memtrace",
-						  powerpc_debugfs_root);
+						  arch_debugfs_dir);
 
 	debugfs_create_file("enable", 0600, memtrace_debugfs_dir,
 			    NULL, &memtrace_init_fops);

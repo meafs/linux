@@ -20,10 +20,6 @@
 #include "rnbd-proto.h"
 #include "rnbd-log.h"
 
-/* Max. number of segments per IO request, Mellanox Connect X ~ Connect X5,
- * choose minimial 30 for all, minus 1 for internal protocol, so 29.
- */
-#define BMAX_SEGMENTS 29
 /*  time in seconds between reconnect tries, default to 30 s */
 #define RECONNECT_DELAY 30
 /*
@@ -87,8 +83,9 @@ struct rnbd_clt_session {
 	DECLARE_BITMAP(cpu_queues_bm, NR_CPUS);
 	int	__percpu	*cpu_rr; /* per-cpu var for CPU round-robin */
 	atomic_t		busy;
-	int			queue_depth;
+	size_t			queue_depth;
 	u32			max_io_size;
+	u32			max_segments;
 	struct blk_mq_tag_set	tag_set;
 	u32			nr_poll_queues;
 	struct mutex		lock; /* protects state and devs_list */

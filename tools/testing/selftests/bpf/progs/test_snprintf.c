@@ -3,7 +3,8 @@
 
 #include <linux/bpf.h>
 #include <bpf/bpf_helpers.h>
-#include <bpf/bpf_tracing.h>
+
+__u32 pid = 0;
 
 char num_out[64] = {};
 long num_ret = 0;
@@ -42,6 +43,9 @@ int handler(const void *ctx)
 	static const char str1[] = "str1";
 	static const char longstr[] = "longstr";
 
+	if ((int)bpf_get_current_pid_tgid() != pid)
+		return 0;
+
 	/* Integer types */
 	num_ret  = BPF_SNPRINTF(num_out, sizeof(num_out),
 				"%d %u %x %li %llu %lX",
@@ -55,9 +59,9 @@ int handler(const void *ctx)
 	/* Kernel pointers */
 	addr_ret = BPF_SNPRINTF(addr_out, sizeof(addr_out), "%pK %px %p",
 				0, 0xFFFF00000ADD4E55, 0xFFFF00000ADD4E55);
-	/* Strings embedding */
-	str_ret  = BPF_SNPRINTF(str_out, sizeof(str_out), "%s %+05s",
-				str1, longstr);
+	/* Strings and single-byte character embedding */
+	str_ret  = BPF_SNPRINTF(str_out, sizeof(str_out), "%s % 9c %+2c %-3c %04c %0c %+05s",
+				str1, 'a', 'b', 'c', 'd', 'e', longstr);
 	/* Overflow */
 	over_ret = BPF_SNPRINTF(over_out, sizeof(over_out), "%%overflow");
 	/* Padding of fixed width numbers */
